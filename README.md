@@ -1,2 +1,2 @@
-# aba-instrument-soundmap
-阿坝乐器声音地图
+# instrument-map
+乐器声音地图
