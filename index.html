@@ -4,22 +4,20 @@
   <meta charset="UTF-8" />
   <title>阿坝乐器声音地图</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <style>
     html, body { margin: 0; padding: 0; height: 100%; }
     #map { height: 100%; width: 100%; cursor: default; }
-    #formContainer, #filterContainer {
+    #formContainer {
       position: absolute;
       top: 10px;
+      left: 10px;
       z-index: 1000;
       background: white;
       padding: 10px;
       border-radius: 8px;
       box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-    }
-    #formContainer {
-      left: 10px;
-      width: 220px;
+      width: 240px;
       height: 30px;
       overflow: hidden;
       transition: height 0.3s;
@@ -27,24 +25,29 @@
     #formContainer:hover {
       height: 320px !important;
     }
+    input, textarea { display: block; margin-top: 5px; width: 200px; }
     #filterContainer {
+      position: absolute;
       right: 10px;
+      top: 10px;
+      background: white;
+      z-index: 1000;
+      padding: 10px;
+      border-radius: 8px;
       max-height: 300px;
       overflow-y: auto;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
     }
-    input, textarea { display: block; margin-top: 5px; width: 200px; }
-    button { margin-top: 10px; }
     .tag-checkbox { margin-right: 5px; }
   </style>
 </head>
 <body>
   <div id="formContainer">
-    <div id="menuHeader" style="font-weight: bold; cursor: pointer;">📁 声音资料菜单（鼠标移入展开）</div>
+    <div style="font-weight: bold;">📁 声音资料菜单（鼠标移入展开）</div>
     <label>说明文字：<textarea id="desc"></textarea></label>
-    <label>分类标签（用逗号分隔）：<input type="text" id="categoryInput" placeholder="如：古琴,节奏型"></label>
+    <label>分类标签（逗号分隔）：<input type="text" id="categoryInput" placeholder="如：古琴,节奏型"></label>
     <label>上传图片：<input type="file" id="imgUpload" accept="image/*"></label>
     <label>上传音频：<input type="file" id="audioUpload" accept="audio/*"></label>
-    
     <p style="font-size: 14px; color: gray;">双击地图任意位置开始添加标记</p>
   </div>
 
@@ -79,16 +82,11 @@
       fadeAnimation: false,
       markerZoomAnimation: false
     }).setView([31.9, 102.2], 9);
+
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-  attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
-  subdomains: 'abcd',
-  maxZoom: 19
-}).addTo(map), {
-      attribution: '&copy; OpenStreetMap contributors'
-      , maxZoom: 19,
-      tileSize: 256,
-      crossOrigin: true,
-      detectRetina: true
+      attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
+      subdomains: 'abcd',
+      maxZoom: 19
     }).addTo(map);
 
     let currentLatLng = null;
@@ -96,13 +94,12 @@
 
     map.on('dblclick', function(e) {
       currentLatLng = e.latlng;
-      document.getElementById('addBtn').disabled = false;
+      handleAddMarker(); // 自动触发添加
     });
 
-    document.getElementById('addBtn').addEventListener('click', async () => {
-      if (!currentLatLng) return;
+    async function handleAddMarker() {
       const desc = document.getElementById('desc').value;
-      const tags = document.getElementById('categoryInput').value.split(',').map(t => t.trim()).filter(t => t !== "");
+      const tags = document.getElementById('categoryInput').value.split(',').map(t => t.trim()).filter(t => t);
       const imgFile = document.getElementById('imgUpload').files[0];
       const audioFile = document.getElementById('audioUpload').files[0];
 
@@ -135,9 +132,8 @@
       document.getElementById('categoryInput').value = '';
       document.getElementById('imgUpload').value = '';
       document.getElementById('audioUpload').value = '';
-      document.getElementById('addBtn').disabled = true;
       currentLatLng = null;
-    });
+    }
 
     function addMarkerToMap(data) {
       const marker = L.marker([data.lat, data.lng]).addTo(map);
@@ -159,8 +155,6 @@
         if (imgUrl) await storage.refFromURL(imgUrl).delete();
         if (audioUrl) await storage.refFromURL(audioUrl).delete();
         await db.collection('markers').doc(id).delete();
-        const popup = btn.closest('.leaflet-popup');
-        if (popup) popup.remove();
         location.reload();
       } catch (e) {
         alert('删除失败：' + e.message);
