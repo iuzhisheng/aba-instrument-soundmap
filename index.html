@@ -33,19 +33,20 @@
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-storage-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-storage-compat.js"></script>
+
   <script>
     const firebaseConfig = {
-  apiKey: "AIzaSyDdxQyRdcMY4702NGcgfkGpVnZYrsWLTnM",
-  authDomain: "aba-instruments-soundmap.firebaseapp.com",
-  projectId: "aba-instruments-soundmap",
-  storageBucket: "aba-instruments-soundmap.appspot.com",
-  messagingSenderId: "669226933350",
-  appId: "1:669226933350:web:794c39f55dc9fcb13a61a7",
-  measurementId: "G-FZQK4H11E5"
-};
+      apiKey: "AIzaSyDdxQyRdcMY4702NGcgfkGpVnZYrsWLTnM",
+      authDomain: "aba-instruments-soundmap.firebaseapp.com",
+      projectId: "aba-instruments-soundmap",
+      storageBucket: "aba-instruments-soundmap.appspot.com",
+      messagingSenderId: "669226933350",
+      appId: "1:669226933350:web:794c39f55dc9fcb13a61a7",
+      measurementId: "G-FZQK4H11E5"
+    };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const storage = firebase.storage();
@@ -86,7 +87,8 @@
       }
 
       await Promise.all(uploadTasks);
-      await db.collection('markers').add(markerData);
+      const docRef = await db.collection('markers').add(markerData);
+      markerData._id = docRef.id;
       addMarkerToMap(markerData);
 
       document.getElementById('desc').value = '';
@@ -97,17 +99,43 @@
     });
 
     function addMarkerToMap(data) {
-      const html = `
+      const marker = L.marker([data.lat, data.lng]).addTo(map);
+      marker._firebaseId = data._id;
+
+      let html = `
         <b>自定义标记</b><br>
         ${data.desc ? `<p>${data.desc}</p>` : ''}
         ${data.audioUrl ? `<audio controls src="${data.audioUrl}"></audio><br>` : ''}
-        ${data.imgUrl ? `<img src="${data.imgUrl}" width="120">` : ''}
+        ${data.imgUrl ? `<img src="${data.imgUrl}" width="120"><br>` : ''}
+        <button onclick="deleteMarker('${data._id}', '${data.imgUrl}', '${data.audioUrl}', this)">🗑 删除此标记</button>
       `;
-      L.marker([data.lat, data.lng]).addTo(map).bindPopup(html);
+      marker.bindPopup(html);
+    }
+
+    async function deleteMarker(id, imgUrl, audioUrl, btn) {
+      if (!confirm("确定要删除这个标记吗？")) return;
+
+      try {
+        if (imgUrl) await storage.refFromURL(imgUrl).delete();
+        if (audioUrl) await storage.refFromURL(audioUrl).delete();
+        await db.collection('markers').doc(id).delete();
+        const popup = btn.closest('.leaflet-popup');
+        if (popup) {
+          const mapPane = document.querySelector('.leaflet-pane.leaflet-popup-pane');
+          mapPane.removeChild(popup.parentNode);
+        }
+        location.reload(); // 刷新地图
+      } catch (e) {
+        alert('删除失败：' + e.message);
+      }
     }
 
     db.collection('markers').get().then(snapshot => {
-      snapshot.forEach(doc => addMarkerToMap(doc.data()));
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        data._id = doc.id;
+        addMarkerToMap(data);
+      });
     });
   </script>
 </body>
