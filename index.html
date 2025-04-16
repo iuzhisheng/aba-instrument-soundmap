@@ -75,6 +75,9 @@
 
     document.getElementById('addBtn').addEventListener('click', async () => {
       if (!currentLatLng) return;
+
+      if (!confirm("是否确认上传此标记内容？")) return;
+
       const desc = document.getElementById('desc').value;
       const tags = document.getElementById('categoryInput').value
         .split(',').map(t => t.trim()).filter(t => t !== "");
@@ -121,10 +124,25 @@
         ${data.desc ? `<p>${data.desc}</p>` : ''}
         ${data.audioUrl ? `<audio controls src="${data.audioUrl}"></audio><br>` : ''}
         ${data.imgUrl ? `<img src="${data.imgUrl}" width="120"><br>` : ''}
+        <button onclick="deleteMarker('${data._id}', '${data.imgUrl}', '${data.audioUrl}', this)">🗑 删除此标记</button>
       `;
       marker.bindPopup(html);
       marker._tags = data.tags || [];
       allMarkers.push(marker);
+    }
+
+    async function deleteMarker(id, imgUrl, audioUrl, btn) {
+      if (!confirm("确定要删除这个标记吗？")) return;
+      try {
+        if (imgUrl) await storage.refFromURL(imgUrl).delete();
+        if (audioUrl) await storage.refFromURL(audioUrl).delete();
+        await db.collection('markers').doc(id).delete();
+        const popup = btn.closest('.leaflet-popup');
+        if (popup) popup.remove();
+        location.reload();
+      } catch (e) {
+        alert('删除失败：' + e.message);
+      }
     }
 
     function buildCategoryFilters() {
