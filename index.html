@@ -4,63 +4,61 @@
   <meta charset="UTF-8" />
   <title>阿坝乐器声音地图</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Leaflet 样式 -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     html, body { margin: 0; padding: 0; height: 100%; }
-    #map { height: 100%; width: 100%; cursor: default; }
-    #formContainer, #filterContainer {
+    #map { width: 100%; height: 100%; cursor: default; }
+    /* 菜单浮层 */
+    #menu, #filterContainer {
       position: absolute;
       top: 10px;
-      z-index: 1000;
       background: white;
-      padding: 10px;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      padding: 8px;
+      border-radius: 6px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      z-index: 1000;
     }
-    #formContainer {
-      left: 10px;
-      width: 220px;
-      height: 30px;
-      overflow: hidden;
-      transition: height 0.3s;
-    }
-    #formContainer:hover {
-      height: 320px !important;
-    }
-    #filterContainer {
-      right: 10px;
-      max-height: 300px;
-      overflow-y: auto;
-    }
-    input, textarea { display: block; margin-top: 5px; width: 200px; }
-    button { margin-top: 10px; }
-    .tag-checkbox { margin-right: 5px; }
+    #menu { left: 10px; width: 220px; height: 30px; overflow: hidden; transition: height 0.3s; }
+    #menu:hover { height: 320px; }
+    #menuHeader { font-weight: bold; cursor: pointer; }
+    #menuContent input, #menuContent textarea { display: block; width: 200px; margin-top: 5px; }
+    #filterContainer { right: 10px; max-height: 300px; overflow-y: auto; }
+    .tag-checkbox { margin-right: 4px; }
   </style>
 </head>
 <body>
-  <div id="formContainer">
-    <div id="menuHeader" style="font-weight: bold; cursor: pointer;">📁 声音资料菜单（鼠标移入展开）</div>
-    <label>说明文字：<textarea id="desc"></textarea></label>
-    <label>分类标签（用逗号分隔）：<input type="text" id="categoryInput" placeholder="如：古琴,节奏型"></label>
-    <label>上传图片：<input type="file" id="imgUpload" accept="image/*"></label>
-    <label>上传音频：<input type="file" id="audioUpload" accept="audio/*"></label>
-    <button id="addBtn" disabled>添加标记</button>
-    <p style="font-size: 14px; color: gray;">双击地图任意位置开始添加标记</p>
+  <!-- 悬停展开的上传/编辑菜单 -->
+  <div id="menu">
+    <div id="menuHeader">📁 声音资料菜单（鼠标移入展开）</div>
+    <div id="menuContent">
+      <label>说明文字：<textarea id="desc"></textarea></label>
+      <label>分类标签（逗号分隔）：<input type="text" id="categoryInput" placeholder="如：古琴,节奏型"></label>
+      <label>上传图片：<input type="file" id="imgUpload" accept="image/*"></label>
+      <label>上传音频：<input type="file" id="audioUpload" accept="audio/*"></label>
+      <button id="addBtn" disabled>添加标记</button>
+      <p style="font-size:12px;color:gray;">双击地图任意位置开始添加标记</p>
+    </div>
   </div>
 
+  <!-- 分类筛选面板 -->
   <div id="filterContainer">
     <strong>分类筛选：</strong><br>
     <div id="categoryFilters"></div>
-    <button onclick="filterMarkers()">应用筛选</button>
+    <button id="filterBtn">应用筛选</button>
   </div>
 
+  <!-- 地图容器 -->
   <div id="map"></div>
 
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <!-- 脚本依赖 -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-storage-compat.js"></script>
+
   <script>
+    // —— Firebase 初始化 —— 
     const firebaseConfig = {
       apiKey: "AIzaSyDdxQyRdcMY4702NGcgfkGpVnZYrsWLTnM",
       authDomain: "aba-instruments-soundmap.firebaseapp.com",
@@ -73,64 +71,66 @@
     const db = firebase.firestore();
     const storage = firebase.storage();
 
+    // —— 地图初始化 —— 
     const map = L.map('map', {
+      center: [31.9, 102.2],
+      zoom: 9,
       doubleClickZoom: false,
       zoomAnimation: false,
       fadeAnimation: false,
       markerZoomAnimation: false
-    }).setView([31.9, 102.2], 9);
+    });
+    // Carto 免费图层
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
-      subdomains: 'abcd',
+      subdomains: ['a','b','c','d'],
       maxZoom: 19
-    }), {
-      attribution: '&copy; OpenStreetMap contributors'
-      , maxZoom: 19,
-      tileSize: 256,
-      crossOrigin: true,
-      detectRetina: true
     }).addTo(map);
 
     let currentLatLng = null;
-    let allMarkers = [];
+    const allMarkers = [];
 
-    map.on('dblclick', function(e) {
+    // 双击地图定位
+    map.on('dblclick', e => {
       currentLatLng = e.latlng;
       document.getElementById('addBtn').disabled = false;
     });
 
+    // 添加标记
     document.getElementById('addBtn').addEventListener('click', async () => {
       if (!currentLatLng) return;
       const desc = document.getElementById('desc').value;
-      const tags = document.getElementById('categoryInput').value.split(',').map(t => t.trim()).filter(t => t !== "");
+      const tags = document.getElementById('categoryInput').value
+        .split(',').map(t => t.trim()).filter(t => t);
       const imgFile = document.getElementById('imgUpload').files[0];
       const audioFile = document.getElementById('audioUpload').files[0];
 
-      const markerData = {
-        lat: currentLatLng.lat,
-        lng: currentLatLng.lng,
-        desc: desc || '',
-        tags: tags,
-        imgUrl: '',
-        audioUrl: ''
-      };
+      const markerData = { lat: currentLatLng.lat, lng: currentLatLng.lng,
+        desc, tags, imgUrl: '', audioUrl: '' };
 
-      const uploadTasks = [];
+      // 上传文件
+      const tasks = [];
       if (imgFile) {
-        const imgRef = storage.ref().child('images/' + Date.now() + '-' + imgFile.name);
-        uploadTasks.push(imgRef.put(imgFile).then(snap => snap.ref.getDownloadURL()).then(url => markerData.imgUrl = url));
+        const ref = storage.ref().child('images/' + Date.now() + '-' + imgFile.name);
+        tasks.push(ref.put(imgFile)
+          .then(snap => snap.ref.getDownloadURL())
+          .then(url => markerData.imgUrl = url));
       }
       if (audioFile) {
-        const audioRef = storage.ref().child('audio/' + Date.now() + '-' + audioFile.name);
-        uploadTasks.push(audioRef.put(audioFile).then(snap => snap.ref.getDownloadURL()).then(url => markerData.audioUrl = url));
+        const ref = storage.ref().child('audio/' + Date.now() + '-' + audioFile.name);
+        tasks.push(ref.put(audioFile)
+          .then(snap => snap.ref.getDownloadURL())
+          .then(url => markerData.audioUrl = url));
       }
+      await Promise.all(tasks);
 
-      await Promise.all(uploadTasks);
+      // 写入 Firestore 并显示
       const docRef = await db.collection('markers').add(markerData);
       markerData._id = docRef.id;
       addMarkerToMap(markerData);
       buildCategoryFilters();
 
+      // 重置表单
       document.getElementById('desc').value = '';
       document.getElementById('categoryInput').value = '';
       document.getElementById('imgUpload').value = '';
@@ -139,59 +139,54 @@
       currentLatLng = null;
     });
 
+    // 在地图上添加 marker
     function addMarkerToMap(data) {
       const marker = L.marker([data.lat, data.lng]).addTo(map);
-      const html = `
-        <b>${(data.tags || []).join(', ')}</b><br>
-        ${data.desc ? `<p>${data.desc}</p>` : ''}
-        ${data.audioUrl ? `<audio controls src="${data.audioUrl}"></audio><br>` : ''}
-        ${data.imgUrl ? `<img src="${data.imgUrl}" width="120"><br>` : ''}
-        <button onclick="deleteMarker('${data._id}', '${data.imgUrl}', '${data.audioUrl}', this)">🗑 删除此标记</button>
-      `;
+      let html = `<b>${data.tags.join(', ')}</b><br>`;
+      if (data.desc) html += `<p>${data.desc}</p>`;
+      if (data.audioUrl) html += `<audio controls src="${data.audioUrl}"></audio><br>`;
+      if (data.imgUrl) html += `<img src="${data.imgUrl}" width="120"><br>`;
+      html += `<button onclick="deleteMarker('${data._id}','${data.imgUrl}','${data.audioUrl}',this)">🗑删除</button>`;
       marker.bindPopup(html);
-      marker._tags = data.tags || [];
+      marker._tags = data.tags;
+      marker._id = data._id;
       allMarkers.push(marker);
     }
 
+    // 删除 marker
     async function deleteMarker(id, imgUrl, audioUrl, btn) {
-      if (!confirm("确定要删除这个标记吗？")) return;
-      try {
-        if (imgUrl) await storage.refFromURL(imgUrl).delete();
-        if (audioUrl) await storage.refFromURL(audioUrl).delete();
-        await db.collection('markers').doc(id).delete();
-        const popup = btn.closest('.leaflet-popup');
-        if (popup) popup.remove();
-        location.reload();
-      } catch (e) {
-        alert('删除失败：' + e.message);
-      }
+      if (!confirm('确定要删除这个标记吗？')) return;
+      if (imgUrl) await storage.refFromURL(imgUrl).delete();
+      if (audioUrl) await storage.refFromURL(audioUrl).delete();
+      await db.collection('markers').doc(id).delete();
+      const mapMarker = btn.closest('.leaflet-popup')._source;
+      map.removeLayer(mapMarker);
     }
 
+    // 构建分类筛选项
     function buildCategoryFilters() {
-      const tagSet = new Set();
-      allMarkers.forEach(marker => marker._tags.forEach(t => tagSet.add(t)));
+      const set = new Set();
+      allMarkers.forEach(m => m._tags.forEach(t => set.add(t)));
       const container = document.getElementById('categoryFilters');
       container.innerHTML = '';
-      [...tagSet].sort().forEach(tag => {
-        const id = 'tag-' + tag;
-        container.innerHTML += `<label><input class="tag-checkbox" type="checkbox" value="${tag}" id="${id}">${tag}</label><br>`;
+      [...set].sort().forEach(tag => {
+        const id = 'chk-' + tag;
+        container.innerHTML += `<label><input class="tag-checkbox" type="checkbox" id="${id}" value="${tag}"/>${tag}</label><br>`;
       });
     }
-
-    function filterMarkers() {
-      const selectedTags = Array.from(document.querySelectorAll('.tag-checkbox:checked')).map(cb => cb.value);
-      allMarkers.forEach(marker => {
-        const match = selectedTags.length === 0 || marker._tags.some(tag => selectedTags.includes(tag));
-        if (match) marker.addTo(map);
-        else map.removeLayer(marker);
+    // 应用分类筛选
+    document.getElementById('filterBtn').addEventListener('click', () => {
+      const checked = [...document.querySelectorAll('.tag-checkbox:checked')].map(cb => cb.value);
+      allMarkers.forEach(m => {
+        const ok = checked.length === 0 || m._tags.some(t => checked.includes(t));
+        ok ? m.addTo(map) : map.removeLayer(m);
       });
-    }
+    });
 
+    // 页面加载时读出所有标记
     db.collection('markers').get().then(snapshot => {
       snapshot.forEach(doc => {
-        const data = doc.data();
-        data._id = doc.id;
-        addMarkerToMap(data);
+        addMarkerToMap({ ...doc.data(), _id: doc.id });
       });
       buildCategoryFilters();
     });
