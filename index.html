@@ -79,7 +79,10 @@
       fadeAnimation: false,
       markerZoomAnimation: false
     }).setView([31.9, 102.2], 9);
-    L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?style=7&x={x}&y={y}&z={z}', {
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
+      subdomains: 'abcd',
+      maxZoom: 19, {
       attribution: '&copy; OpenStreetMap contributors'
       , maxZoom: 19,
       tileSize: 256,
