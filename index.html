@@ -4,10 +4,11 @@
   <meta charset="UTF-8" />
   <title>阿坝乐器声音地图</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-sA+zNn2ZMOE49hXcr/N7A9L0Uq0E8v+6QoYtN+ZfM0o=" crossorigin=""/>
   <style>
     html, body { margin: 0; padding: 0; height: 100%; }
-    #map { height: 100%; width: 100%; }
+    #map { height: 100%; width: 100%; cursor: default; }
     #formContainer, #filterContainer {
       position: absolute;
       top: 10px;
@@ -17,26 +18,35 @@
       border-radius: 8px;
       box-shadow: 0 2px 10px rgba(0,0,0,0.2);
     }
-    #formContainer { left: 10px; }
-    #filterContainer { right: 10px; max-height: 300px; overflow-y: auto; }
-    input, textarea { display: block; margin-top: 5px; width: 200px; }
-    button { margin-top: 10px; }
-    .tag-checkbox { margin-right: 5px; }
-  
+    #formContainer {
+      left: 10px;
+      width: 220px;
+      height: 30px;
+      overflow: hidden;
+      transition: height 0.3s;
+    }
     #formContainer:hover {
       height: 320px !important;
     }
-    
+    #filterContainer {
+      right: 10px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    input, textarea { display: block; margin-top: 5px; width: 200px; }
+    button { margin-top: 10px; }
+    .tag-checkbox { margin-right: 5px; }
+  </style>
 </head>
 <body>
-  <div id="formContainer" style="width: 220px; height: 30px; overflow: hidden; transition: height 0.3s;">
+  <div id="formContainer">
     <div id="menuHeader" style="font-weight: bold; cursor: pointer;">📁 声音资料菜单（鼠标移入展开）</div>
     <label>说明文字：<textarea id="desc"></textarea></label>
     <label>分类标签（用逗号分隔）：<input type="text" id="categoryInput" placeholder="如：古琴,节奏型"></label>
     <label>上传图片：<input type="file" id="imgUpload" accept="image/*"></label>
     <label>上传音频：<input type="file" id="audioUpload" accept="audio/*"></label>
     <button id="addBtn" disabled>添加标记</button>
-    <p style="font-size: 12px; color: gray;">点击地图任意位置开始添加标记</p>
+    <p style="font-size: 14px; color: gray;">双击地图任意位置开始添加标记</p>
   </div>
 
   <div id="filterContainer">
@@ -51,7 +61,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-storage-compat.js"></script>
-
   <script>
     const firebaseConfig = {
       apiKey: "AIzaSyDdxQyRdcMY4702NGcgfkGpVnZYrsWLTnM",
@@ -80,10 +89,8 @@
 
     document.getElementById('addBtn').addEventListener('click', async () => {
       if (!currentLatLng) return;
-
       const desc = document.getElementById('desc').value;
-      const tags = document.getElementById('categoryInput').value
-        .split(',').map(t => t.trim()).filter(t => t !== "");
+      const tags = document.getElementById('categoryInput').value.split(',').map(t => t.trim()).filter(t => t !== "");
       const imgFile = document.getElementById('imgUpload').files[0];
       const audioFile = document.getElementById('audioUpload').files[0];
 
@@ -99,11 +106,11 @@
       const uploadTasks = [];
       if (imgFile) {
         const imgRef = storage.ref().child('images/' + Date.now() + '-' + imgFile.name);
-        uploadTasks.push(imgRef.put(imgFile).then(snapshot => snapshot.ref.getDownloadURL()).then(url => markerData.imgUrl = url));
+        uploadTasks.push(imgRef.put(imgFile).then(snap => snap.ref.getDownloadURL()).then(url => markerData.imgUrl = url));
       }
       if (audioFile) {
         const audioRef = storage.ref().child('audio/' + Date.now() + '-' + audioFile.name);
-        uploadTasks.push(audioRef.put(audioFile).then(snapshot => snapshot.ref.getDownloadURL()).then(url => markerData.audioUrl = url));
+        uploadTasks.push(audioRef.put(audioFile).then(snap => snap.ref.getDownloadURL()).then(url => markerData.audioUrl = url));
       }
 
       await Promise.all(uploadTasks);
@@ -160,15 +167,11 @@
     }
 
     function filterMarkers() {
-      const selectedTags = Array.from(document.querySelectorAll('.tag-checkbox:checked'))
-        .map(cb => cb.value);
+      const selectedTags = Array.from(document.querySelectorAll('.tag-checkbox:checked')).map(cb => cb.value);
       allMarkers.forEach(marker => {
         const match = selectedTags.length === 0 || marker._tags.some(tag => selectedTags.includes(tag));
-        if (match) {
-          marker.addTo(map);
-        } else {
-          map.removeLayer(marker);
-        }
+        if (match) marker.addTo(map);
+        else map.removeLayer(marker);
       });
     }
 
