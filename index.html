@@ -80,12 +80,9 @@
       fadeAnimation: false,
       markerZoomAnimation: false
     }).setView([31.9, 102.2], 9);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    L.tileLayer('https://rt2.map.gtimg.com/tile?z={z}&x={x}&y={y}&styleid=2&scene=0', {
       attribution: '&copy; OpenStreetMap contributors'
-      , maxZoom: 19,
-      tileSize: 256,
-      crossOrigin: true,
-      detectRetina: true
+      , tms: false
     }).addTo(map);
 
     let currentLatLng = null;
