@@ -33,64 +33,80 @@
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js"></script>
   <script>
-    let map = L.map('map').setView([31.9, 102.2], 9);
+    const firebaseConfig = {
+      apiKey: "AIzaSy*****",
+      authDomain: "your-project.firebaseapp.com",
+      projectId: "your-project-id",
+      storageBucket: "your-project.appspot.com",
+      messagingSenderId: "xxxx",
+      appId: "xxxx"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const storage = firebase.storage();
 
+    const map = L.map('map').setView([31.9, 102.2], 9);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
     let currentLatLng = null;
-
-    // 点击地图记录位置
     map.on('click', function(e) {
       currentLatLng = e.latlng;
       document.getElementById('addBtn').disabled = false;
     });
 
-    document.getElementById('addBtn').addEventListener('click', () => {
+    document.getElementById('addBtn').addEventListener('click', async () => {
       if (!currentLatLng) return;
-
       const desc = document.getElementById('desc').value;
       const imgFile = document.getElementById('imgUpload').files[0];
       const audioFile = document.getElementById('audioUpload').files[0];
 
-      const readerTasks = [];
-      const media = { img: '', audio: '' };
+      const markerData = {
+        lat: currentLatLng.lat,
+        lng: currentLatLng.lng,
+        desc: desc || '',
+        imgUrl: '',
+        audioUrl: ''
+      };
 
+      const uploadTasks = [];
       if (imgFile) {
-        readerTasks.push(new Promise(resolve => {
-          const reader = new FileReader();
-          reader.onload = e => { media.img = e.target.result; resolve(); };
-          reader.readAsDataURL(imgFile);
-        }));
+        const imgRef = storage.ref().child('images/' + Date.now() + '-' + imgFile.name);
+        uploadTasks.push(imgRef.put(imgFile).then(snapshot => snapshot.ref.getDownloadURL()).then(url => markerData.imgUrl = url));
       }
-
       if (audioFile) {
-        readerTasks.push(new Promise(resolve => {
-          const reader = new FileReader();
-          reader.onload = e => { media.audio = e.target.result; resolve(); };
-          reader.readAsDataURL(audioFile);
-        }));
+        const audioRef = storage.ref().child('audio/' + Date.now() + '-' + audioFile.name);
+        uploadTasks.push(audioRef.put(audioFile).then(snapshot => snapshot.ref.getDownloadURL()).then(url => markerData.audioUrl = url));
       }
 
-      Promise.all(readerTasks).then(() => {
-        const html = `
-          <b>自定义标记</b><br>
-          ${desc ? `<p>${desc}</p>` : ''}
-          ${media.audio ? `<audio controls src="${media.audio}"></audio><br>` : ''}
-          ${media.img ? `<img src="${media.img}" width="120">` : ''}
-        `;
+      await Promise.all(uploadTasks);
+      await db.collection('markers').add(markerData);
+      addMarkerToMap(markerData);
 
-        L.marker(currentLatLng).addTo(map).bindPopup(html);
+      document.getElementById('desc').value = '';
+      document.getElementById('imgUpload').value = '';
+      document.getElementById('audioUpload').value = '';
+      document.getElementById('addBtn').disabled = true;
+      currentLatLng = null;
+    });
 
-        // 重置
-        document.getElementById('desc').value = '';
-        document.getElementById('imgUpload').value = '';
-        document.getElementById('audioUpload').value = '';
-        document.getElementById('addBtn').disabled = true;
-        currentLatLng = null;
-      });
+    function addMarkerToMap(data) {
+      const html = `
+        <b>自定义标记</b><br>
+        ${data.desc ? `<p>${data.desc}</p>` : ''}
+        ${data.audioUrl ? `<audio controls src="${data.audioUrl}"></audio><br>` : ''}
+        ${data.imgUrl ? `<img src="${data.imgUrl}" width="120">` : ''}
+      `;
+      L.marker([data.lat, data.lng]).addTo(map).bindPopup(html);
+    }
+
+    db.collection('markers').get().then(snapshot => {
+      snapshot.forEach(doc => addMarkerToMap(doc.data()));
     });
   </script>
 </body>
