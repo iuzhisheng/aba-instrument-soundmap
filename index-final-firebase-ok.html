@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <title>阿坝乐器声音地图</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; }
+    #map { height: 100%; width: 100%; cursor: default; }
+    #formContainer {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 1000;
+      background: white;
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      width: 240px;
+      height: 30px;
+      overflow: hidden;
+      transition: height 0.3s;
+    }
+    #formContainer:hover {
+      height: 320px !important;
+    }
+    input, textarea { display: block; margin-top: 5px; width: 200px; }
+    #filterContainer {
+      position: absolute;
+      right: 10px;
+      top: 10px;
+      background: white;
+      z-index: 1000;
+      padding: 10px;
+      border-radius: 8px;
+      max-height: 300px;
+      overflow-y: auto;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    }
+    .tag-checkbox { margin-right: 5px; }
+  </style>
+</head>
+<body>
+  <div id="formContainer">
+    <div style="font-weight: bold;">📁 声音资料菜单（鼠标移入展开）</div>
+    <label>说明文字：<textarea id="desc"></textarea></label>
+    <label>分类标签（逗号分隔）：<input type="text" id="categoryInput" placeholder="如：古琴,节奏型"></label>
+    <label>上传图片：<input type="file" id="imgUpload" accept="image/*"></label>
+    <label>上传音频：<input type="file" id="audioUpload" accept="audio/*"></label>
+    <p style="font-size: 14px; color: gray;">双击地图任意位置开始添加标记</p>
+  </div>
+
+  <div id="filterContainer">
+    <strong>分类筛选：</strong><br>
+    <div id="categoryFilters"></div>
+    <button onclick="filterMarkers()">应用筛选</button>
+  </div>
+
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-storage-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDdxQyRdcMY4702NGcgfkGpVnZYrsWLTnM",
+      authDomain: "aba-instruments-soundmap.firebaseapp.com",
+      projectId: "aba-instruments-soundmap",
+      storageBucket: "aba-instruments-soundmap.appspot.com",
+      messagingSenderId: "669226933350",
+      appId: "1:669226933350:web:794c39f55dc9fcb13a61a7"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const storage = firebase.storage();
+
+    const map = L.map('map', {
+      doubleClickZoom: false,
+      zoomAnimation: false,
+      fadeAnimation: false,
+      markerZoomAnimation: false
+    }).setView([31.9, 102.2], 9);
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
+      subdomains: 'abcd',
+      maxZoom: 19
+    }).addTo(map);
+
+    let currentLatLng = null;
+    let allMarkers = [];
+
+    map.on('dblclick', function(e) {
+      currentLatLng = e.latlng;
+      handleAddMarker(); // 自动触发添加
+    });
+
+    async function handleAddMarker() {
+      const desc = document.getElementById('desc').value;
+      const tags = document.getElementById('categoryInput').value.split(',').map(t => t.trim()).filter(t => t);
+      const imgFile = document.getElementById('imgUpload').files[0];
+      const audioFile = document.getElementById('audioUpload').files[0];
+
+      const markerData = {
+        lat: currentLatLng.lat,
+        lng: currentLatLng.lng,
+        desc: desc || '',
+        tags: tags,
+        imgUrl: '',
+        audioUrl: ''
+      };
+
+      const uploadTasks = [];
+      if (imgFile) {
+        const imgRef = storage.ref().child('images/' + Date.now() + '-' + imgFile.name);
+        uploadTasks.push(imgRef.put(imgFile).then(snap => snap.ref.getDownloadURL()).then(url => markerData.imgUrl = url));
+      }
+      if (audioFile) {
+        const audioRef = storage.ref().child('audio/' + Date.now() + '-' + audioFile.name);
+        uploadTasks.push(audioRef.put(audioFile).then(snap => snap.ref.getDownloadURL()).then(url => markerData.audioUrl = url));
+      }
+
+      await Promise.all(uploadTasks);
+      const docRef = await db.collection('markers').add(markerData);
+      markerData._id = docRef.id;
+      addMarkerToMap(markerData);
+      buildCategoryFilters();
+
+      document.getElementById('desc').value = '';
+      document.getElementById('categoryInput').value = '';
+      document.getElementById('imgUpload').value = '';
+      document.getElementById('audioUpload').value = '';
+      currentLatLng = null;
+    }
+
+    function addMarkerToMap(data) {
+      const marker = L.marker([data.lat, data.lng]).addTo(map);
+      const html = `
+        <b>${(data.tags || []).join(', ')}</b><br>
+        ${data.desc ? `<p>${data.desc}</p>` : ''}
+        ${data.audioUrl ? `<audio controls src="${data.audioUrl}"></audio><br>` : ''}
+        ${data.imgUrl ? `<img src="${data.imgUrl}" width="120"><br>` : ''}
+        <button onclick="deleteMarker('${data._id}', '${data.imgUrl}', '${data.audioUrl}', this)">🗑 删除此标记</button>
+      `;
+      marker.bindPopup(html);
+      marker._tags = data.tags || [];
+      allMarkers.push(marker);
+    }
+
+    async function deleteMarker(id, imgUrl, audioUrl, btn) {
+      if (!confirm("确定要删除这个标记吗？")) return;
+      try {
+        if (imgUrl) await storage.refFromURL(imgUrl).delete();
+        if (audioUrl) await storage.refFromURL(audioUrl).delete();
+        await db.collection('markers').doc(id).delete();
+        location.reload();
+      } catch (e) {
+        alert('删除失败：' + e.message);
+      }
+    }
+
+    function buildCategoryFilters() {
+      const tagSet = new Set();
+      allMarkers.forEach(marker => marker._tags.forEach(t => tagSet.add(t)));
+      const container = document.getElementById('categoryFilters');
+      container.innerHTML = '';
+      [...tagSet].sort().forEach(tag => {
+        const id = 'tag-' + tag;
+        container.innerHTML += `<label><input class="tag-checkbox" type="checkbox" value="${tag}" id="${id}">${tag}</label><br>`;
+      });
+    }
+
+    function filterMarkers() {
+      const selectedTags = Array.from(document.querySelectorAll('.tag-checkbox:checked')).map(cb => cb.value);
+      allMarkers.forEach(marker => {
+        const match = selectedTags.length === 0 || marker._tags.some(tag => selectedTags.includes(tag));
+        if (match) marker.addTo(map);
+        else map.removeLayer(marker);
+      });
+    }
+
+    db.collection('markers').get().then(snapshot => {
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        data._id = doc.id;
+        addMarkerToMap(data);
+      });
+      buildCategoryFilters();
+    });
+  </script>
+</body>
+</html>
