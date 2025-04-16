@@ -68,15 +68,13 @@
     let currentLatLng = null;
     let allMarkers = [];
 
-    map.on('click', function(e) {
+    map.on('dblclick', function(e) {
       currentLatLng = e.latlng;
       document.getElementById('addBtn').disabled = false;
     });
 
     document.getElementById('addBtn').addEventListener('click', async () => {
       if (!currentLatLng) return;
-
-      if (!confirm("是否确认上传此标记内容？")) return;
 
       const desc = document.getElementById('desc').value;
       const tags = document.getElementById('categoryInput').value
