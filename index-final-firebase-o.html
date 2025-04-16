@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <title>阿坝乐器声音地图</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; }
+    #map { height: 100%; width: 100%; cursor: default; }
+    #formContainer {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 1000;
+      background: white;
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      width: 240px;
+      height: 30px;
+      overflow: hidden;
+      transition: height 0.3s;
+    }
+    #formContainer:hover { height: 300px; }
+    input, textarea { display: block; margin-top: 5px; width: 200px; }
+  </style>
+</head>
+<body>
+  <div id="formContainer">
+    <strong>📁 上传资料（鼠标移入展开）</strong>
+    <label>说明文字：<textarea id="desc"></textarea></label>
+    <label>上传图片：<input type="file" id="imgUpload" accept="image/*"></label>
+    <label>上传音频：<input type="file" id="audioUpload" accept="audio/*"></label>
+    <p style="font-size: 12px; color: gray;">双击地图添加标记</p>
+  </div>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-storage-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDdxQyRdcMY4702NGcgfkGpVnZYrsWLTnM",
+      authDomain: "aba-instruments-soundmap.firebaseapp.com",
+      projectId: "aba-instruments-soundmap",
+      storageBucket: "aba-instruments-soundmap.appspot.com",
+      messagingSenderId: "669226933350",
+      appId: "1:669226933350:web:794c39f55dc9fcb13a61a7"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const storage = firebase.storage();
+
+    const map = L.map('map', { doubleClickZoom: false }).setView([31.9, 102.2], 9);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
+      subdomains: 'abcd',
+      maxZoom: 19
+    }).addTo(map);
+
+    map.on('dblclick', async function(e) {
+      const desc = document.getElementById('desc').value;
+      const imgFile = document.getElementById('imgUpload').files[0];
+      const audioFile = document.getElementById('audioUpload').files[0];
+
+      const markerData = {
+        lat: e.latlng.lat,
+        lng: e.latlng.lng,
+        desc: desc || '',
+        imgUrl: '',
+        audioUrl: ''
+      };
+
+      const uploads = [];
+      if (imgFile) {
+        const ref = storage.ref().child('images/' + Date.now() + '-' + imgFile.name);
+        uploads.push(ref.put(imgFile).then(snap => snap.ref.getDownloadURL()).then(url => markerData.imgUrl = url));
+      }
+      if (audioFile) {
+        const ref = storage.ref().child('audio/' + Date.now() + '-' + audioFile.name);
+        uploads.push(ref.put(audioFile).then(snap => snap.ref.getDownloadURL()).then(url => markerData.audioUrl = url));
+      }
+
+      await Promise.all(uploads);
+      const doc = await db.collection('markers').add(markerData);
+      markerData._id = doc.id;
+      addMarkerToMap(markerData);
+
+      document.getElementById('desc').value = '';
+      document.getElementById('imgUpload').value = '';
+      document.getElementById('audioUpload').value = '';
+    });
+
+    function addMarkerToMap(data) {
+      const html = `
+        ${data.desc ? `<p>${data.desc}</p>` : ''}
+        ${data.audioUrl ? `<audio controls src="${data.audioUrl}"></audio><br>` : ''}
+        ${data.imgUrl ? `<img src="${data.imgUrl}" width="120">` : ''}
+      `;
+      L.marker([data.lat, data.lng]).addTo(map).bindPopup(html);
+    }
+
+    db.collection('markers').get().then(snapshot => {
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        addMarkerToMap(data);
+      });
+    });
+  </script>
+</body>
+</html>
