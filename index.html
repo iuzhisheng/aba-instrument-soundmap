@@ -80,9 +80,12 @@
       fadeAnimation: false,
       markerZoomAnimation: false
     }).setView([31.9, 102.2], 9);
-    L.tileLayer('https://rt2.map.gtimg.com/tile?z={z}&x={x}&y={y}&styleid=2&scene=0', {
+    L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&style=7&x={x}&y={y}&z={z}', {
       attribution: '&copy; OpenStreetMap contributors'
-      , tms: false
+      , maxZoom: 19,
+      tileSize: 256,
+      crossOrigin: true,
+      detectRetina: true
     }).addTo(map);
 
     let currentLatLng = null;
