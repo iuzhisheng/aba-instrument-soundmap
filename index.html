@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
     html, body { margin: 0; padding: 0; height: 100%; }
-    #map { height: 100%; width: 100%; cursor: pointer; }
+    #map { height: 100%; width: 100%; }
     #formContainer, #filterContainer {
       position: absolute;
       top: 10px;
@@ -22,10 +22,15 @@
     input, textarea { display: block; margin-top: 5px; width: 200px; }
     button { margin-top: 10px; }
     .tag-checkbox { margin-right: 5px; }
-  </style>
+  
+    #formContainer:hover {
+      height: 320px !important;
+    }
+    
 </head>
 <body>
-  <div id="formContainer" style="display:none">
+  <div id="formContainer" style="width: 220px; height: 30px; overflow: hidden; transition: height 0.3s;">
+    <div id="menuHeader" style="font-weight: bold; cursor: pointer;">📁 声音资料菜单（鼠标移入展开）</div>
     <label>说明文字：<textarea id="desc"></textarea></label>
     <label>分类标签（用逗号分隔）：<input type="text" id="categoryInput" placeholder="如：古琴,节奏型"></label>
     <label>上传图片：<input type="file" id="imgUpload" accept="image/*"></label>
@@ -60,7 +65,7 @@
     const db = firebase.firestore();
     const storage = firebase.storage();
 
-    const map = L.map('map').setView([31.9, 102.2], 9);
+    const map = L.map('map', { doubleClickZoom: false }).setView([31.9, 102.2], 9);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
